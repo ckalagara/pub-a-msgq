@@ -3,7 +3,12 @@ package mq
 import (
 	"errors"
 	"fmt"
+	"log"
 	"sync"
+)
+
+const (
+	debug = false
 )
 
 type Queue interface {
@@ -16,6 +21,7 @@ type Queue interface {
 }
 
 func NewQueueWithChannelImpl(topics []string) Queue {
+	fmt.Printf("Creating new queue with channel impl with topics %v \n", topics)
 	q := &qChannelImpl{
 		topics: topics,
 	}
@@ -46,7 +52,10 @@ type Topic struct {
 func (t *Topic) Shutdown() {
 	t.lock.Lock()
 	defer t.lock.Unlock()
-	for _, ch := range t.core {
+	for client, ch := range t.core {
+		if debug {
+			log.Printf("Shutdown %v subscription %s channel", t.name, client)
+		}
 		close(ch)
 	}
 }
@@ -88,7 +97,9 @@ func (q *qChannelImpl) Publish(topic string, message Message) error {
 	topicCore.lock.Lock()
 	defer topicCore.lock.Unlock()
 	for client, ch := range topicCore.core {
-		fmt.Printf("Publishing message to topic %s for %s client\n", topic, client)
+		if debug {
+			fmt.Printf("Publishing message to topic %s for %s client\n", topic, client)
+		}
 		ch <- message
 	}
 	return nil

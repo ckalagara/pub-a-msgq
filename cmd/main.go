@@ -35,12 +35,14 @@ func main() {
 	}
 
 	// creating consumer as routines
-	ctx, canFun := context.WithDeadline(ctxB, time.Now().Add(30*time.Second))
+	fmt.Println("Creating consumers")
+	ctx, canFun := context.WithDeadline(ctxB, time.Now().Add(20*time.Second))
 	defer canFun()
 	go Consumer(ctx, CidSubBkend1, TopicSub, stream)
 	go Consumer(ctx, CidPurBkend1, TopicPur, stream2)
 
 	// Publishing few messages
+	fmt.Println("Publishing messages to topics")
 	for i := 0; i < 10; i++ {
 		m := make(map[string]interface{})
 		m["id"] = fmt.Sprintf("%d", i)
@@ -50,6 +52,9 @@ func main() {
 		if err = q.Publish(TopicPur, m); err != nil {
 			fmt.Printf("Failed to publish %v \n", err)
 		}
+		// artifical dealy
+		time.Sleep(1 * time.Second)
+
 		err = q.Publish(TopicSub, m)
 		if err != nil {
 			fmt.Printf("Failed to publish %v \n", err)
@@ -57,9 +62,10 @@ func main() {
 	}
 
 	// waiting for the consumers tor read
-	time.Sleep(45 * time.Minute)
+	time.Sleep(10 * time.Second)
 
 	// Unsubscribing
+	fmt.Println("Unsubscribe the topics")
 	err = q.Unsubscribe(CidSubBkend1, TopicSub)
 	if err != nil {
 		fmt.Printf("Failed to unsubscribe %v \n", err)
