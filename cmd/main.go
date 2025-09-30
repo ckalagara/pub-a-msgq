@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ckalagara/pub-a-msgq.git/mq"
+	"github.com/ckalagara/pub-a-msgq/mq"
 )
 
 const (
