@@ -109,7 +109,11 @@ func (q *qChannelImpl) Publish(topic string, message Message) error {
 
 func (q *qChannelImpl) Shutdown() {
 	q.core.Range(func(key, value interface{}) bool {
-		close(value.(chan Message))
+		t, ok := value.(Topic)
+		if !ok {
+			return false
+		}
+		t.Shutdown()
 		return true
 	})
 }
