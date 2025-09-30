@@ -17,25 +17,30 @@ const (
 
 func main() {
 	ctxB := context.Background()
+	// new msgQ
 	q := mq.NewQueueWithChannelImpl([]string{TopicSub, TopicPur})
 
+	// sub1
 	stream, err := q.Subscribe(CidSubBkend1, TopicSub)
 	if err != nil {
 		fmt.Printf("Failed to sunbcribe with %v \n", err)
 		return
 	}
 
+	// sub2
 	stream2, err := q.Subscribe(CidPurBkend1, TopicPur)
 	if err != nil {
 		fmt.Printf("Failed to subscribe with %v \n", err)
 		return
 	}
 
-	ctx, canFun := context.WithDeadline(ctxB, time.Now().Add(100*time.Second))
+	// creating consumer as routines
+	ctx, canFun := context.WithDeadline(ctxB, time.Now().Add(30*time.Second))
 	defer canFun()
 	go Consumer(ctx, CidSubBkend1, TopicSub, stream)
 	go Consumer(ctx, CidPurBkend1, TopicPur, stream2)
 
+	// Publishing few messages
 	for i := 0; i < 10; i++ {
 		m := make(map[string]interface{})
 		m["id"] = fmt.Sprintf("%d", i)
@@ -45,13 +50,16 @@ func main() {
 		if err = q.Publish(TopicPur, m); err != nil {
 			fmt.Printf("Failed to publish %v \n", err)
 		}
-		err := q.Publish(TopicSub, m)
+		err = q.Publish(TopicSub, m)
 		if err != nil {
 			fmt.Printf("Failed to publish %v \n", err)
 		}
 	}
 
-	time.Sleep(1 * time.Minute)
+	// waiting for the consumers tor read
+	time.Sleep(45 * time.Minute)
+
+	// Unsubscribing
 	err = q.Unsubscribe(CidSubBkend1, TopicSub)
 	if err != nil {
 		fmt.Printf("Failed to unsubscribe %v \n", err)
@@ -61,6 +69,7 @@ func main() {
 		fmt.Printf("Failed to unsubscribe %v \n", err)
 	}
 
+	// shutting down
 	q.Shutdown()
 
 }
