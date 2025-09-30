@@ -61,6 +61,8 @@ func main() {
 		fmt.Printf("Failed to unsubscribe %v \n", err)
 	}
 
+	q.Shutdown()
+
 }
 
 func Consumer(ctx context.Context, clientID, topic string, ch chan mq.Message) {
