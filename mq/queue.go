@@ -8,7 +8,8 @@ import (
 )
 
 const (
-	debug = false
+	debug         = false
+	channelBuffer = 10
 )
 
 type Queue interface {
@@ -68,7 +69,7 @@ func (q *qChannelImpl) Subscribe(clientID string, topic string) (chan Message, e
 
 	topicCore.lock.Lock()
 	defer topicCore.lock.Unlock()
-	ch := make(chan Message)
+	ch := make(chan Message, channelBuffer)
 	topicCore.core[clientID] = ch
 	return ch, nil
 }
@@ -82,7 +83,10 @@ func (q *qChannelImpl) Unsubscribe(clientID string, topic string) error {
 	topicCore.lock.Lock()
 	defer topicCore.lock.Unlock()
 
-	close(topicCore.core[clientID])
+	v := topicCore.core[clientID]
+	if v != nil {
+		close(v)
+	}
 
 	delete(topicCore.core, clientID)
 	return nil

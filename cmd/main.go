@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ckalagara/pub-a-msgq/mq"
@@ -13,6 +14,11 @@ const (
 	TopicPur     = "purchases"
 	CidSubBkend1 = "subscription-bkend-1"
 	CidPurBkend1 = "purchases-bkend-1"
+
+	demoMsgCount = 10
+
+	messagePublishDelay    = 500 * time.Millisecond
+	consumerSessionTimeout = 15 * time.Second
 )
 
 func main() {
@@ -20,73 +26,74 @@ func main() {
 	// new msgQ
 	q := mq.NewQueueWithChannelImpl([]string{TopicSub, TopicPur})
 
-	// sub1
-	stream, err := q.Subscribe(CidSubBkend1, TopicSub)
-	if err != nil {
-		fmt.Printf("Failed to sunbcribe with %v \n", err)
-		return
-	}
-
-	// sub2
-	stream2, err := q.Subscribe(CidPurBkend1, TopicPur)
-	if err != nil {
-		fmt.Printf("Failed to subscribe with %v \n", err)
-		return
-	}
-
+	wg := sync.WaitGroup{}
 	// creating consumer as routines
 	fmt.Println("Creating consumers")
-	ctx, canFun := context.WithDeadline(ctxB, time.Now().Add(20*time.Second))
+	ctx, canFun := context.WithDeadline(ctxB, time.Now().Add(consumerSessionTimeout))
 	defer canFun()
-	go Consumer(ctx, CidSubBkend1, TopicSub, stream)
-	go Consumer(ctx, CidPurBkend1, TopicPur, stream2)
+
+	wg.Go(func() {
+		Consumer(ctx, CidSubBkend1, TopicSub, q)
+	})
+
+	wg.Go(func() {
+		Consumer(ctx, CidPurBkend1, TopicPur, q)
+	})
 
 	// Publishing few messages
-	fmt.Println("Publishing messages to topics")
-	for i := 0; i < 10; i++ {
-		m := make(map[string]interface{})
-		m["id"] = fmt.Sprintf("%d", i)
-		m["message"] = "Hello World"
-		m["time"] = time.Now().String()
+	PublishMessages(q, demoMsgCount)
 
-		if err = q.Publish(TopicPur, m); err != nil {
-			fmt.Printf("Failed to publish %v \n", err)
-		}
-		// artifical dealy
-		time.Sleep(1 * time.Second)
-
-		err = q.Publish(TopicSub, m)
-		if err != nil {
-			fmt.Printf("Failed to publish %v \n", err)
-		}
-	}
-
-	// waiting for the consumers tor read
-	time.Sleep(10 * time.Second)
-
-	// Unsubscribing
-	fmt.Println("Unsubscribe the topics")
-	err = q.Unsubscribe(CidSubBkend1, TopicSub)
-	if err != nil {
-		fmt.Printf("Failed to unsubscribe %v \n", err)
-	}
-	err = q.Unsubscribe(CidPurBkend1, TopicPur)
-	if err != nil {
-		fmt.Printf("Failed to unsubscribe %v \n", err)
-	}
+	wg.Wait()
 
 	// shutting down
 	q.Shutdown()
 
 }
 
-func Consumer(ctx context.Context, clientID, topic string, ch chan mq.Message) {
+func PublishMessages(q mq.Queue, count int) {
+	fmt.Println("Publishing messages to topics")
+	for i := 1; i <= count; i++ {
+		m := make(map[string]interface{})
+		m["id"] = fmt.Sprintf("%d", i)
+		m["message"] = "Hello World"
+		m["time"] = time.Now().String()
+
+		if err := q.Publish(TopicPur, m); err != nil {
+			fmt.Printf("Failed to publish %v \n", err)
+		}
+		// artificial dealy
+		time.Sleep(messagePublishDelay)
+
+		if err := q.Publish(TopicSub, m); err != nil {
+			fmt.Printf("Failed to publish %v \n", err)
+		}
+	}
+}
+
+func Consumer(ctx context.Context, clientID, topic string, q mq.Queue) {
+	// subscribing
+	fmt.Printf("Subscribing %s from %s \n", clientID, topic)
+	ch, err := q.Subscribe(clientID, topic)
+	if err != nil {
+		fmt.Printf("Failed to subscribe with %v \n", err)
+		return
+	}
+
+	// consuming
+readerLoop:
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			break readerLoop
 		case msg := <-ch:
 			fmt.Printf("Consumption | %s, topic %s, message: %v \n", clientID, topic, msg)
 		}
+	}
+
+	// unsubscribing
+	fmt.Printf("Unsubscribing %s from %s \n", clientID, topic)
+	err = q.Unsubscribe(clientID, topic)
+	if err != nil {
+		fmt.Printf("Failed to unsubscribe %v \n", err)
 	}
 }
