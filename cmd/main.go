@@ -10,10 +10,11 @@ import (
 )
 
 const (
-	TopicSub     = "subscription"
-	TopicPur     = "purchases"
-	CidSubBkend1 = "subscription-bkend-1"
-	CidPurBkend1 = "purchases-bkend-1"
+	TopicSub      = "subscription"
+	TopicPur      = "purchases"
+	CidSubBkEnd1  = "subscription-bkend-1"
+	CidPurBkEnd1  = "purchases-bkend-1"
+	CidCartBkEnd1 = "cart-bkend-1"
 
 	demoMsgCount = 10
 
@@ -33,11 +34,11 @@ func main() {
 	defer canFun()
 
 	wg.Go(func() {
-		Consumer(ctx, CidSubBkend1, TopicSub, q)
+		Consumer(ctx, CidSubBkEnd1, TopicSub, q)
 	})
 
 	wg.Go(func() {
-		Consumer(ctx, CidPurBkend1, TopicPur, q)
+		Consumer(ctx, CidPurBkEnd1, TopicPur, q)
 	})
 
 	// Publishing few messages
@@ -58,21 +59,25 @@ func PublishMessages(q mq.Queue, count int) {
 		m["message"] = "Hello World"
 		m["time"] = time.Now().String()
 
-		if err := q.Publish(TopicPur, m); err != nil {
-			fmt.Printf("Failed to publish %v \n", err)
-		}
+		publish(q, TopicPur, m)
+
 		// artificial dealy
 		time.Sleep(messagePublishDelay)
 
-		if err := q.Publish(TopicSub, m); err != nil {
-			fmt.Printf("Failed to publish %v \n", err)
-		}
+		publish(q, TopicSub, m)
+	}
+}
+
+func publish(q mq.Queue, topic string, m map[string]interface{}) {
+	fmt.Printf("Publishing | %s, topic %s, message: %v \n", CidCartBkEnd1, topic, m)
+	if err := q.Publish(topic, m); err != nil {
+		fmt.Printf("Failed to publish %v \n", err)
 	}
 }
 
 func Consumer(ctx context.Context, clientID, topic string, q mq.Queue) {
 	// subscribing
-	fmt.Printf("Subscribing %s from %s \n", clientID, topic)
+	fmt.Printf("Subscribing %s client to %s topic \n", clientID, topic)
 	ch, err := q.Subscribe(clientID, topic)
 	if err != nil {
 		fmt.Printf("Failed to subscribe with %v \n", err)
@@ -86,12 +91,12 @@ readerLoop:
 		case <-ctx.Done():
 			break readerLoop
 		case msg := <-ch:
-			fmt.Printf("Consumption | %s, topic %s, message: %v \n", clientID, topic, msg)
+			fmt.Printf("Consuming  | %s, topic %s, message: %v \n", clientID, topic, msg)
 		}
 	}
 
 	// unsubscribing
-	fmt.Printf("Unsubscribing %s from %s \n", clientID, topic)
+	fmt.Printf("Unsubscribing %s client to %s topic \n", clientID, topic)
 	err = q.Unsubscribe(clientID, topic)
 	if err != nil {
 		fmt.Printf("Failed to unsubscribe %v \n", err)
